@@ -1,9 +1,8 @@
 #!/bin/env python
-"""This file has the code for running the green apple server.
+"""This file has the code for running the Red-Apple Server.
 
-This file additionally has the code for invoking a SocketIO client to listen to
-the data published by the Green-Apple server. The socket client and the running
-Red-Apple server exchange data using shared class variables.
+The red apple server is primarily connected to red clients only and also reads
+from shared resources to propogate any supplied information to the clients.
 
 Author: sagarbhat94@gmail.com (Sagar Bhat)
 """
@@ -14,48 +13,31 @@ from flask_socketio import SocketIO, emit, join_room, leave_room
 from datasource import SharedResource as shared_db
 
 
-class GreenAppleServer:
-    """Class, attributes and methods for the green apple server.
+class RedAppleServer:
+    """Class, attributes and methods for the Red Apple Server.
     """
 
     def __init__(self, host=None, port=None, *args, **kwargs):
-        self.host = host or "localhost"
-        self.port = port or "5000"
-        self.namespace = kwargs.pop("namespace", "/")
-        self.consumer_namespace = kwargs.pop("consumer_namespace", "/")
-        self.producer_namespace = kwargs.pop("producer_namespace", "/")
         self.sid_to_rooms_map = {}
-        self.active_green_ids = []
-        self.new_published_data = []
+        self.host = host or "0.0.0.0"
+        self.port = port or "5000"
+        self.client_namespace = kwargs.pop("client_namespace", "/")
+        self.server_namespace = kwargs.pop("server_namespace", "/")
         self.app = Flask(__name__)
         self.sio_server = SocketIO(self.app)
-        super(GreenAppleServer, self).__init__(*args, **kwargs)
+        super(RedAppleServer, self).__init__(*args, **kwargs)
 
-        # For server-to-server interaction (RedServer-GreenServer)
         self.sio_server.on_event(
-            "connect", self.on_server_connect, namespace=RED_SERVER_NS
+            "disconnect", self.on_disconnect, namespace=self.server_namespace
         )
         self.sio_server.on_event(
-            "disconnect", self.on_server_disconnect, namespace=RED_SERVER_NS
+            "join", self.on_join, namespace=self.server_namespace
         )
         self.sio_server.on_event(
-            "listen_to_client", self.listen_for_data, namespace=RED_SERVER_NS
-        )
-        # For server-to-client interaction (GreenServer-GreenClient)
-        self.sio_server.on_event(
-            "connect", self.on_client_connect, namespace=GRN_CLIENT_NS
+            "leave", self.on_leave, namespace=self.server_namespace
         )
         self.sio_server.on_event(
-            "disconnect", self.on_client_disconnect, namespace=GRN_CLIENT_NS
-        )
-        self.sio_server.on_event(
-            "incoming_data", self.on_incoming_data, namespace=GRN_CLIENT_NS
-        )
-        self.sio_server.on_event(
-            "join", self.on_client_join, namespace=GRN_CLIENT_NS
-        )
-        self.sio_server.on_event(
-            "leave", self.on_client_leave, namespace=GRN_CLIENT_NS
+            "new_data", self.on_new_data, namespace=self.server_namespace
         )
 
     def on_disconnect(self):
@@ -127,7 +109,6 @@ class GreenAppleServer:
             )
             return
         join_room(room_id)
-        print(f"< One new instance of 'RED{room_id}' connected >")
 
     def on_leave(self):
         """Removes a red client from its registered room.
@@ -155,98 +136,6 @@ class GreenAppleServer:
 
         :return: None
         """
-        print(f"Starting server on '{self.host}:{self.port}'...")
+        print(f"(Starting server on '{self.host}:{self.port}')")
         self.sio_server.run(self.app, host=self.host, port=self.port)
         print("Server closed.")
-
-
-
-
-
-
-def __init__(self):
-
-    self.sid_to_rooms_map = {}
-    self.active_green_ids = []
-    self.new_supplied_data = []
-
-    self.app = Flask(__name__)
-    self.sio_server = SocketIO(self.app)
-
-    # For server-to-server interaction (RedServer-GreenServer)
-    self.sio_server.on_event(
-        "connect", self.on_server_connect, namespace=RED_SERVER_NS
-    )
-    self.sio_server.on_event(
-        "disconnect", self.on_server_disconnect, namespace=RED_SERVER_NS
-    )
-    self.sio_server.on_event(
-        "listen_to_client", self.listen_for_data, namespace=RED_SERVER_NS
-    )
-    # For server-to-client interaction (GreenServer-GreenClient)
-    self.sio_server.on_event(
-        "connect", self.on_client_connect, namespace=GRN_CLIENT_NS
-    )
-    self.sio_server.on_event(
-        "disconnect", self.on_client_disconnect, namespace=GRN_CLIENT_NS
-    )
-    self.sio_server.on_event(
-        "incoming_data", self.on_incoming_data, namespace=GRN_CLIENT_NS
-    )
-    self.sio_server.on_event(
-        "join", self.on_client_join, namespace=GRN_CLIENT_NS
-    )
-    self.sio_server.on_event(
-        "leave", self.on_client_leave, namespace=GRN_CLIENT_NS
-    )
-
-def on_server_connect(self):
-    """Somethinfg
-    """
-    print("< Red Apple Server is Live >")
-    self.new_supplied_data = []
-
-def on_server_disconnect(self):
-    """Somethinfg
-    """
-    print("< Red Apple Server disconnected >")
-
-def listen_for_data(self):
-    """Somethinfg
-    """
-    if self.new_supplied_data:
-        data = self.new_supplied_data.copy()
-        self.new_supplied_data = []
-        return {"data": data, "active": self.active_green_ids}
-    return {"data": None, "active": self.active_green_ids}
-
-#HERE
-def on_client_connect(self):
-    print("On connect called")
-
-def on_client_disconnect(self):
-    print("On disconnect called")
-    print(self.active_green_ids)
-    try:
-        room_id = self.sid_to_rooms_map.pop(request.sid)
-        self.active_green_ids.remove(room_id)
-    except (KeyError, ValueError):
-        pass
-    print(self.active_green_ids)
-    print("Left")
-
-def on_incoming_data(self, data):
-    """ """
-    self.new_supplied_data.append((data["id"], data["data"]))
-
-def on_client_join(self, data):
-    """ """
-    if data["id"] in self.active_green_ids:
-        emit("duplicate_connection", namespace=GRN_CLIENT_NS)
-        return
-    self.sid_to_rooms_map[request.sid] = data["id"]
-    self.active_green_ids.append(data["id"])
-
-def on_client_leave(self):
-    """ """
-    print("Left the Room")

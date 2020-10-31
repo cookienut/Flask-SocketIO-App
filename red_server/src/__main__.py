@@ -1,5 +1,5 @@
 #!/bin/env python
-"""This file has the code for running the Red-Apple Server.
+"""This file has the code for running the red apple server.
 
 This file additionally has the code for invoking a SocketIO client to listen to
 the data published by the Green-Apple server. The socket client and the running
@@ -13,12 +13,12 @@ from server import RedAppleServer
 from settings import RedServerConstants as consts
 
 
-# Listener(
-#     host=consts.grn_server_host,
-#     port=consts.grn_server_port,
-#     client_namespace=consts.grn_client_nmsp,
-#     server_namespace=consts.grn_client_nmsp
-# ).run()
+Listener(
+    host=consts.grn_server_host,
+    port=consts.grn_server_port,
+    client_namespace=consts.grn_client_nmsp,
+    server_namespace=consts.grn_client_nmsp
+).run()
 
 RedAppleServer(
     host=consts.red_server_host,

@@ -1,8 +1,9 @@
 #!/bin/env python
-"""This file has code for listening to data published by green apple server.
+"""This file has client code for publishing data to green apple server.
 
 This file has a class derived from SocketIO's `ClientNamespace` and consists
-of instance methods to listen to data published by the green apple server.
+of instance methods to supply data to green apple server which forwards it
+further to red apple server and then eventually to red clients.
 
 Author: sagarbhat94@gmail.com (Sagar Bhat)
 """
@@ -12,14 +13,9 @@ import sys
 from socketio import Client, ClientNamespace
 from socketio import exceptions as sio_exceptions
 
-from datasource import SharedResource as shared_db
-
-
-class Listener(ClientNamespace):
-    """Class for listening to data publised by green apple server.
+class GreenClient(ClientNamespace):
+    """Class for publishing data to green apple server.
     """
-
-    sio_client = Client(reconnection=False)
 
     def __init__(self, host=None, port=None, *args, **kwargs):
         self.host = host or "0.0.0.0"
@@ -27,7 +23,11 @@ class Listener(ClientNamespace):
         self.connect_url = f"http://{self.host}:{self.port}"
         self.client_namespace = kwargs.pop("client_namespace", "/")
         self.server_namespace = kwargs.pop("server_namespace", "/")
-        super(Listener, self).__init__(namespace=self.client_namespace)
+        self.color = "GRN"
+        self.numID = input("Hello GRN, enter three digit ID: ")
+        self.colID = self.color + self.numID
+        self.sio_client = Client(reconnection=False)
+        super(GreenClient, self).__init__(namespace=self.client_namespace)
 
     def connect_to_server(self):
         """Creates a connection with the green apple server.
@@ -43,7 +43,7 @@ class Listener(ClientNamespace):
         :return: None
         """
         try:
-            Listener.sio_client.connect(
+            self.sio_client.connect(
                 self.connect_url, namespaces=[self.server_namespace]
             )
         except sio_exceptions.BadNamespaceError as ex:
@@ -63,81 +63,85 @@ class Listener(ClientNamespace):
 
         :return: None
         """
-        print("< Disconnecting >")
-        Listener.sio_client.disconnect()
+        try:
+            self.sio_client.disconnect()
+        except:
+            pass
+
+    def send_data(self):
+        """Sends new data to be received by green apple server.
+
+        This method continuously supplies data to connected green apple server
+        till connection is alive. If input data is put as `<q>`, it breaks the
+        loop and disconnects the client from server. Otherwise, emits the data
+        to be further forwarded till it reaches the appropriate red clients.
+
+        :param self: The reference to class instance.
+
+        :return: None
+        """
+        while True:
+            inp = input(f"{self.colID}> ")
+            if inp.strip() == "<q>":
+                self.disconnect_from_server()
+                sys.exit(0)
+            data = {
+                "id": self.numID,
+                "data": inp
+            }
+            if self.sio_client.connected:
+                self.sio_client.emit(
+                    "incoming_data", data, namespace=self.server_namespace
+                )
+                continue
+            self.disconnect_server()
+            break
 
     def on_connect(self):
-        """Prints connection acknowledgement and starts listening for new data.
+        """Prints connection acknowledgement and starts publishing new data.
 
         This method gets invoked right before establishing a connection with
-        the green apple server. It prints acknowledment and starts listening
-        for any new published data till server or client disconnects.
+        green apple server. It prints acknowledment and calls the `on_join`
+        method of green apple server, which as a callback calls the method
+        `send_data` of the client.
 
         :param self: The reference to class instance. This will be used to call
                      the instance methods and to access the instance variables.
 
         :return: None
         """
-        print("< Connected to Green Apple Server >")
-        shared_db.green_server_connected = True
-        self.on_listening()
+        print("<Connected to Green Apple Server >")
+        join_data = {
+            "id": self.numID
+        }
+        self.sio_client.emit(
+            "join",
+            join_data,
+            callback=self.send_data,
+            namespace=self.server_namespace
+        )
 
     def on_disconnect(self):
         """Prints disconnect acknowledgement.
 
-        This method gets invoked right before disconnecting a client from the
-        server. It updates the boolean flag of shared data resource to notify
-        that it cannot listen to the server anymore due to closed connection.
-
         :param self: The reference to class instance.
 
         :return: None
         """
-        shared_db.green_server_connected = False
         print("< Disconnected from Green Apple Server >")
 
-    def parse_new_data(self, data):
-        """Updates the shared data resource with the published data.
+    def on_duplicate_connection(self):
+        """Closes duplicate connection by disconnecting client from server.
 
-        This method gets invoked as a callback right after detecting new data
-        published by green apple server. It updates  the shared data resource
-        with the green client id and its corresponding data.
+        This method gets invoked if a green client with the same three digit id
+        is already connected to the green apple server.
 
         :param self: The reference to class instance.
-        :param data: The dict of all active green client ids and new published
-                     data as a list of tuple. For example:
-                        {
-                            "data": [("123", "data1"), ("456", "data2")],
-                            "active": ["123", "456", "789"]
-                        }
 
         :return: None
         """
-        shared_db.active_green_ids = data["active"]
-        if not data["data"]:
-            return
-        for (room_id, new_data) in data["data"]:
-            shared_db.new_published_data[room_id].append(new_data)
-
-    def on_listening(self):
-        """Listens for any new published data forwarded by green apple server.
-
-        This method gets invoked right after connecting with the green apple
-        server and listens for published data continuously till connection is
-        alive.
-
-        :param self: The reference to class instance. This will be used to call
-                     the instance methods and to access the instance variables.
-
-        :return: None
-        """
-        while Listener.sio_client.connected:
-            Listener.sio_client.emit(
-                "listen_to_client",
-                callback=self.parse_new_data,
-                namespace=self.server_namespace
-            )
-            Listener.sio_client.sleep(0.5)
+        print(f"ERROR: One instance of '{self.colID}' is already running.")
+        self.disconnect_from_server()
 
     def run(self):
         """Runs instance of SocketIO client to connect to green apple server.
@@ -151,5 +155,6 @@ class Listener(ClientNamespace):
 
         :return: None
         """
-        Listener.sio_client.register_namespace(self)
+        print("======== GREEN CLIENT CONSOLE [use <q> to Exit] ==========")
+        self.sio_client.register_namespace(self)
         self.connect_to_server()
